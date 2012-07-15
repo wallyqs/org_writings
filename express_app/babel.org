@@ -1,0 +1,237 @@
+#+TITLE: Example of a simple web app with express
+
+* Building a simple web app with express
+** Scaffolding the app
+
+#+begin_src sh :results output
+~/node_modules/express/bin/express
+#+end_src
+
+#+RESULTS:
+#+begin_example
+   create : .
+   create : ./package.json
+   create : ./app.js
+   create : ./public
+   create : ./public/javascripts
+   create : ./public/images
+   create : ./public/stylesheets
+   create : ./public/stylesheets/style.css
+   create : ./routes
+   create : ./routes/index.js
+   create : ./views
+   create : ./views/layout.jade
+   create : ./views/index.jade
+
+   install dependencies:
+     $ cd . && npm install
+
+   run the app:
+     $ node app
+#+end_example
+
+For this app, I want to customize things a bit and have a =controllers= folder,
+instead of using the =routes= folder created when scaffolding the app.
+
+#+begin_src sh
+mkdir controllers
+rm -rf routes
+#+end_src
+
+** Dependencies: package.json
+
+The project will be built using latest =express= web framework,
+=swig= for templates given its similarity to Django templates,
+and =mongojs= as the driver for MongoDB.
+
+We also include the =consolidate= module as a workaround to
+make =swig= templates to work with latest express.
+
+#+begin_src js :tangle package.json
+{
+  "name": "simple-express-app",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "start": "node app"
+  },
+  "dependencies": {
+    "express": "3.0.0beta6",
+    "swig": "*",
+    "consolidate": "*",
+    "mongojs": "*"
+  }
+}
+#+end_src
+
+** Installing the dependencies
+
+A Node.js project includes its dependencies
+along with the project under the =node_modules= directory.
+
+#+begin_src sh :results output
+npm install
+#+end_src
+
+#+begin_src sh
+ls node_modules
+#+end_src
+
+#+RESULTS:
+| consolidate |
+| express     |
+| mongojs     |
+| swig        |
+
+** Bootstrapping: app.js
+
+This is were we build up the app and start the server.
+
+*** Require application dependencies
+
+#+begin_src js :tangle app.js
+var express	= require('express')
+  , fs          = require('fs')
+  , swig        = require('swig')
+  , cons	= require('consolidate')
+  , http	= require('http')
+  , app		= express();
+#+end_src
+
+*** Configuration
+
+In order for this to work in latest express =swig=,
+we have to explicitly say that we are using =swig= as
+the template engine for =.html= files, initialize it,
+and then use =consolidate= to enable it.
+
+Notice that we have to set =allowErrors= to =true=,
+otherwise a /Circular extends found/ error will be thrown
+when using template inheritance.
+
+#+begin_src js :tangle app.js
+swig.init({
+    root: __dirname + '/views',
+    allowErrors: true,
+    autoescape: true,
+    encoding: 'utf8'
+});
+
+app.engine('html', cons.swig);
+#+end_src
+
+Here we include some commonly use middleware used for =express= apps.
+Also we set the views directory by using the =swig.root= that
+we previously set.
+
+#+begin_src js :tangle app.js
+app.configure(function(){
+  app.set('port', process.env.VCAP_PORT || 3000);
+  app.set('views', swig.root);
+  app.set('view engine', 'html');
+  app.use(express.favicon());
+  app.use(express.logger('dev'));
+  app.use(express.bodyParser());
+  app.use(express.methodOverride());
+  app.use(app.router);
+  app.use(express.static(__dirname + '/public'));
+});
+#+end_src
+
+Only show errors in development.
+
+#+begin_src js :tangle app.js
+app.configure('development', function(){
+  app.use(express.errorHandler());
+});
+#+end_src
+
+*** Load the controllers
+
+We have to load all the controllers manually by globbing
+the =controllers= directory we created.
+
+#+begin_src js :tangle app.js
+var Controllers = {};
+fs.readdirSync(__dirname + '/controllers').forEach(function(filename){
+  name = filename.split('.')[0];
+  Controllers[name] = require(__dirname + '/controllers/' + filename);
+});
+#+end_src
+
+*** Routes of the application
+
+#+begin_src js :tangle app.js
+app.get('/', Controllers.home.index);
+#+end_src
+
+*** Starting the server!
+
+#+begin_src js :tangle app.js
+http.createServer(app).listen(app.get('port'), function(){
+  console.log("Express server listening on port " + app.get('port'));
+});
+#+end_src
+
+** The Controllers
+*** Scaffolding the controllers
+
+We have to create a directory for the views from each
+controller since it was not created during the initial scaffold:
+
+#+begin_src sh :results output
+mkdir controllers/home
+#+end_src
+
+*** Action :: Home#index
+
+This points to the root of the application.
+
+#+begin_src js :tangle controllers/home.js
+ exports.index = function(req, res){
+   res.render('home/index', { title: 'Express' });
+ };
+#+end_src
+
+** TODO The Models
+** The Views
+*** The Layout
+
+#+begin_src  django-html :tangle views/layout.html
+ <!DOCTYPE html>
+ <html>
+   <head>
+     <title>{% block title %}{% endblock %}</title>
+     <link rel="stylesheet" href="/stylesheets/style.css" type="text/css" media="screen" />
+   </head>
+   {% block body %}{% endblock %}
+ </html>
+#+end_src
+
+*** Template :: Home#index 
+
+#+begin_src  django-html :tangle views/home/index.html
+{% extends 'layout.html' %}
+
+{% block body %}
+<div class="content">
+  <h1> {{ title }} </h1>
+  <p> Welcome to {{ title }}
+  </p>
+</div>
+{% endblock %}
+#+end_src
+
+** Running the app
+
+#+begin_src sh :results output
+node app.js
+#+end_src
+
+* Links
+
+- Express example apps
+  https://github.com/visionmedia/express/tree/master/examples
+
+- Comparison among Node.js template technologies
+  http://paularmstrong.github.com/node-templates/
