@@ -3,12 +3,12 @@
 * Building a simple web app with express
 ** Scaffolding the app
 
-#+begin_src sh :results output
+#+BEGIN_SRC sh :results output
 ~/node_modules/express/bin/express
-#+end_src
+#+END_SRC
 
 #+RESULTS:
-#+begin_example
+#+BEGIN_EXAMPLE
    create : .
    create : ./package.json
    create : ./app.js
@@ -28,15 +28,15 @@
 
    run the app:
      $ node app
-#+end_example
+#+END_EXAMPLE
 
 For this app, I want to customize things a bit and have a =controllers= folder,
 instead of using the =routes= folder created when scaffolding the app.
 
-#+begin_src sh
+#+BEGIN_SRC sh
 mkdir controllers
 rm -rf routes
-#+end_src
+#+END_SRC
 
 ** Dependencies: package.json
 
@@ -47,7 +47,7 @@ and =mongojs= as the driver for MongoDB.
 We also include the =consolidate= module as a workaround to
 make =swig= templates to work with latest express.
 
-#+begin_src js :tangle package.json
+#+BEGIN_SRC js :tangle package.json
 {
   "name": "simple-express-app",
   "version": "0.0.1",
@@ -62,20 +62,20 @@ make =swig= templates to work with latest express.
     "mongojs": "*"
   }
 }
-#+end_src
+#+END_SRC
 
 ** Installing the dependencies
 
 A Node.js project includes its dependencies
 along with the project under the =node_modules= directory.
 
-#+begin_src sh :results output
+#+BEGIN_SRC sh :results output
 npm install
-#+end_src
+#+END_SRC
 
-#+begin_src sh
+#+BEGIN_SRC sh
 ls node_modules
-#+end_src
+#+END_SRC
 
 #+RESULTS:
 | consolidate |
@@ -89,14 +89,14 @@ This is were we build up the app and start the server.
 
 *** Require application dependencies
 
-#+begin_src js :tangle app.js
+#+BEGIN_SRC js :tangle app.js
 var express	= require('express')
   , fs          = require('fs')
   , swig        = require('swig')
   , cons	= require('consolidate')
   , http	= require('http')
   , app		= express();
-#+end_src
+#+END_SRC
 
 *** Configuration
 
@@ -109,7 +109,7 @@ Notice that we have to set =allowErrors= to =true=,
 otherwise a /Circular extends found/ error will be thrown
 when using template inheritance.
 
-#+begin_src js :tangle app.js
+#+BEGIN_SRC js :tangle app.js
 swig.init({
     root: __dirname + '/views',
     allowErrors: true,
@@ -118,13 +118,13 @@ swig.init({
 });
 
 app.engine('html', cons.swig);
-#+end_src
+#+END_SRC
 
 Here we include some commonly use middleware used for =express= apps.
 Also we set the views directory by using the =swig.root= that
 we previously set.
 
-#+begin_src js :tangle app.js
+#+BEGIN_SRC js :tangle app.js
 app.configure(function(){
   app.set('port', process.env.VCAP_PORT || 3000);
   app.set('views', swig.root);
@@ -136,42 +136,42 @@ app.configure(function(){
   app.use(app.router);
   app.use(express.static(__dirname + '/public'));
 });
-#+end_src
+#+END_SRC
 
 Only show errors in development.
 
-#+begin_src js :tangle app.js
+#+BEGIN_SRC js :tangle app.js
 app.configure('development', function(){
   app.use(express.errorHandler());
 });
-#+end_src
+#+END_SRC
 
 *** Load the controllers
 
 We have to load all the controllers manually by globbing
 the =controllers= directory we created.
 
-#+begin_src js :tangle app.js
+#+BEGIN_SRC js :tangle app.js
 var Controllers = {};
 fs.readdirSync(__dirname + '/controllers').forEach(function(filename){
   name = filename.split('.')[0];
   Controllers[name] = require(__dirname + '/controllers/' + filename);
 });
-#+end_src
+#+END_SRC
 
 *** Routes of the application
 
-#+begin_src js :tangle app.js
+#+BEGIN_SRC js :tangle app.js
 app.get('/', Controllers.home.index);
-#+end_src
+#+END_SRC
 
 *** Starting the server!
 
-#+begin_src js :tangle app.js
+#+BEGIN_SRC js :tangle app.js
 http.createServer(app).listen(app.get('port'), function(){
   console.log("Express server listening on port " + app.get('port'));
 });
-#+end_src
+#+END_SRC
 
 ** The Controllers
 *** Scaffolding the controllers
@@ -179,25 +179,25 @@ http.createServer(app).listen(app.get('port'), function(){
 We have to create a directory for the views from each
 controller since it was not created during the initial scaffold:
 
-#+begin_src sh :results output
+#+BEGIN_SRC sh :results output
 mkdir controllers/home
-#+end_src
+#+END_SRC
 
 *** Action :: Home#index
 
 This points to the root of the application.
 
-#+begin_src js :tangle controllers/home.js
+#+BEGIN_SRC js :tangle controllers/home.js
  exports.index = function(req, res){
    res.render('home/index', { title: 'Express' });
  };
-#+end_src
+#+END_SRC
 
 ** TODO The Models
 ** The Views
 *** The Layout
 
-#+begin_src  django-html :tangle views/layout.html
+#+BEGIN_SRC  django-html :tangle views/layout.html
  <!DOCTYPE html>
  <html>
    <head>
@@ -206,11 +206,11 @@ This points to the root of the application.
    </head>
    {% block body %}{% endblock %}
  </html>
-#+end_src
+#+END_SRC
 
 *** Template :: Home#index 
 
-#+begin_src  django-html :tangle views/home/index.html
+#+BEGIN_SRC  django-html :tangle views/home/index.html
 {% extends 'layout.html' %}
 
 {% block body %}
@@ -220,13 +220,13 @@ This points to the root of the application.
   </p>
 </div>
 {% endblock %}
-#+end_src
+#+END_SRC
 
 ** Running the app
 
-#+begin_src sh :results output
+#+BEGIN_SRC sh :results output
 node app.js
-#+end_src
+#+END_SRC
 
 * Links
 
