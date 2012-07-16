@@ -259,7 +259,7 @@ This points to the root of the application.
 
 This creates a new Text.
 
-#+begin_src js :tangle controllers/texts.js
+#+BEGIN_SRC js :tangle controllers/texts.js
   var Text = require('../models/text.js');
 
   exports.create = function(req, res){
@@ -273,7 +273,7 @@ This creates a new Text.
 
     res.send('Created a new text.');
   };
-#+end_src
+#+END_SRC
 ** The Views
 *** The Layout
 
