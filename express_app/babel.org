@@ -42,7 +42,7 @@ rm -rf routes
 
 The project will be built using latest =express= web framework,
 =swig= for templates given its similarity to Django templates,
-and =mongojs= as the driver for MongoDB.
+and =mongoose= as the ORM for MongoDB.
 
 We also include the =consolidate= module as a workaround to
 make =swig= templates to work with latest express.
@@ -59,7 +59,7 @@ make =swig= templates to work with latest express.
     "express": "3.0.0beta6",
     "swig": "*",
     "consolidate": "*",
-    "mongojs": "*"
+    "mongoose": "*"
   }
 }
 #+END_SRC
@@ -80,7 +80,7 @@ ls node_modules
 #+RESULTS:
 | consolidate |
 | express     |
-| mongojs     |
+| mongoose    |
 | swig        |
 
 ** Bootstrapping: app.js
@@ -94,8 +94,44 @@ var express	= require('express')
   , fs          = require('fs')
   , swig        = require('swig')
   , cons	= require('consolidate')
+  , mongoose	= require('mongoose')
   , http	= require('http')
   , app		= express();
+#+END_SRC
+
+*** Connect to MongoDB
+
+Create the connection to MongoDB on startup:
+
+#+BEGIN_SRC js :tangle app.js
+if(process.env.VCAP_SERVICES){
+  var env = JSON.parse(process.env.VCAP_SERVICES);
+  var mongo = env['mongodb-1.8'][0]['credentials'];
+} else {
+  var mongo = {
+    "hostname":"localhost",
+    "port":27017,
+    "username":"",
+    "password":"",
+    "name":"",
+    "db":"simple_express_app"
+  }
+}
+
+var mongo_url = function(obj){
+  obj.hostname = (obj.hostname || 'localhost');
+  obj.port = (obj.port || 27017);
+  obj.db = (obj.db || 'test');
+
+  if(obj.username && obj.password){
+    return "mongodb://" + obj.username + ":" + obj.password + "@" + obj.hostname + ":" + obj.port + "/" + obj.db;
+  }
+  else{
+    return "mongodb://" + obj.hostname + ":" + obj.port + "/" + obj.db;
+  }
+}
+
+mongoose.connect(mongo_url(mongo));
 #+END_SRC
 
 *** Configuration
@@ -154,7 +190,7 @@ the =controllers= directory we created.
 #+BEGIN_SRC js :tangle app.js
 var Controllers = {};
 fs.readdirSync(__dirname + '/controllers').forEach(function(filename){
-  name = filename.split('.')[0];
+  var name = filename.split('.')[0];
   Controllers[name] = require(__dirname + '/controllers/' + filename);
 });
 #+END_SRC
@@ -162,7 +198,8 @@ fs.readdirSync(__dirname + '/controllers').forEach(function(filename){
 *** Routes of the application
 
 #+BEGIN_SRC js :tangle app.js
-app.get('/', Controllers.home.index);
+app.get('/'		, Controllers.home.index);
+app.get('/texts/create'	, Controllers.texts.create);
 #+END_SRC
 
 *** Starting the server!
@@ -172,7 +209,28 @@ http.createServer(app).listen(app.get('port'), function(){
   console.log("Express server listening on port " + app.get('port'));
 });
 #+END_SRC
+** The Models
 
+We will use =mongoose= to set up the models of the application.
+
+#+BEGIN_SRC sh
+mkdir models
+#+END_SRC
+
+*** Model :: Text
+
+#+BEGIN_SRC js :tangle models/text.js
+var mongoose = require('mongoose')
+  , Schema   = mongoose.Schema;
+
+var textSchema = new Schema({
+    title:	{ type: String, index: true }
+  , content:	{ type: String }
+  , created_at: { type: Date, default: Date.now }
+});
+
+module.exports = mongoose.model('Text', textSchema);
+#+END_SRC
 ** The Controllers
 *** Scaffolding the controllers
 
@@ -188,12 +246,34 @@ mkdir controllers/home
 This points to the root of the application.
 
 #+BEGIN_SRC js :tangle controllers/home.js
- exports.index = function(req, res){
-   res.render('home/index', { title: 'Express' });
- };
+  var Text = require('../models/text.js');
+
+  exports.index = function(req, res){
+    Text.find({}, function(err, texts){    
+      res.render('home/index', { page_title: 'Texts', texts: texts });
+    });
+  };
 #+END_SRC
 
-** TODO The Models
+*** Action :: Text#create
+
+This creates a new Text.
+
+#+begin_src js :tangle controllers/texts.js
+  var Text = require('../models/text.js');
+
+  exports.create = function(req, res){
+    var t = new Text({ page_title: "Example"
+                     , content: "Lorem ipsum dolor..." 
+                    });
+
+    t.save(function(err){
+      if (err) console.log('Something went wrong:' + err);
+    });
+
+    res.send('Created a new text.');
+  };
+#+end_src
 ** The Views
 *** The Layout
 
@@ -201,27 +281,32 @@ This points to the root of the application.
  <!DOCTYPE html>
  <html>
    <head>
-     <title>{% block title %}{% endblock %}</title>
+     <title>{% block page_title %}{% endblock %}</title>
      <link rel="stylesheet" href="/stylesheets/style.css" type="text/css" media="screen" />
    </head>
    {% block body %}{% endblock %}
  </html>
 #+END_SRC
 
-*** Template :: Home#index 
+*** Template :: Home#index
 
-#+BEGIN_SRC  django-html :tangle views/home/index.html
-{% extends 'layout.html' %}
-
-{% block body %}
-<div class="content">
-  <h1> {{ title }} </h1>
-  <p> Welcome to {{ title }}
-  </p>
-</div>
-{% endblock %}
+#+BEGIN_SRC rhtml :tangle views/home/index.html
+  {% extends 'layout.html' %}
+  
+  {% block body %}
+  <div class="content">
+    <h1> {{ page_title }} </h1>
+    <p> Current Texts
+      <ol>
+        {% for text in texts %}
+        <li>{{ text.title }}</li>
+        {% endfor %}    
+      </ol>
+    </p>
+  </div>
+  {% endblock %}
+  
 #+END_SRC
-
 ** Running the app
 
 #+BEGIN_SRC sh :results output
@@ -235,3 +320,13 @@ node app.js
 
 - Comparison among Node.js template technologies
   http://paularmstrong.github.com/node-templates/
+
+- Example of using mongoose for the schema
+  https://github.com/LearnBoost/mongoose/blob/master/examples/schema.js
+
+- Connecting to MongoDB in Cloudfoundry
+  http://docs.cloudfoundry.com/services/mongodb/nodejs-mongodb.html
+
+- Gist with examples about how to use mongoose
+  https://gist.github.com/1025038
+

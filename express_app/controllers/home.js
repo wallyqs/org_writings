@@ -1,4 +1,8 @@
 
+var Text = require('../models/text.js');
+
 exports.index = function(req, res){
-  res.render('home/index', { title: 'Express' });
+  Text.find({}, function(err, texts){    
+    res.render('home/index', { page_title: 'Texts', texts: texts });
+  });
 };
