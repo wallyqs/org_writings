@@ -12,7 +12,7 @@ accumulated value of 17 or more, in case it gets to this value
 then it will stand.
 
 The basic actions such as hitting and standing are implemented.
-At the beginning of the session, it also possible for the user
+At the beginning of the session, it is also possible for the user
 to make a bet for chips, though in case the player ends up
 without chips then the game is over.
 
@@ -514,7 +514,7 @@ A Player can bet some of his chips so that they are multiplied in case he wins.
 We need to validate that the bet is valid by checking that:
 
 - The player has enough chips to make such bet
-- The amount to be bet is an integer number (we would trunctate decimals)
+- The amount to be bet is an integer number (we would truncate decimals)
 
 #+begin_src ruby :tangle lib/blackjack.rb
 
@@ -699,7 +699,7 @@ for file in `find . -name *.rb`; do
 done
 #+END_SRC
 
-A game can be start the game as follows:
+A game session can be started as follows:
 
 #+name: play-the-game
 #+BEGIN_SRC  ruby
