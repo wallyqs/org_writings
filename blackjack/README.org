@@ -1,0 +1,39 @@
+* BlackJack Game in Ruby
+
+Simple implementation of a BlackJack game in Ruby,
+developed as Literate programming document with Org mode.
+
+Literate programming file =BlackJack.org= should 
+offer more info about how the program was developed, 
+but the main source can still be found at =lib= directory along
+with its tests at the =spec= directory.
+
+** How to run it
+
+You can start it within an IRB session as follows:
+
+#+BEGIN_SRC sh
+irb> require './lib/blackjack.rb'
+irb> BlackJack::Game.start!
+
+#########################################
+Welcome to the Blackjack game.
+
+Press C-c at any time to exit the game.
+#########################################
+Game to be played with 52 cards.
+
+Please make a bet on the number of chips for this round.
+How many chips will you bet? [Remaining: 100]> 
+#+END_SRC
+
+** How to run the tests
+
+Tests themselves can be executed with the following command:
+
+: bundle install
+: bundle exec rake spec
+
+** Example session
+
+

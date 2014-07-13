@@ -1,0 +1,709 @@
+#+TITLE:   A basic Blackjack game
+#+runmode: sequential
+
+*** Introduction
+
+This is a basic implementation of the BlackJack game,
+where a player will try to get a set of cards that together have a sum
+as close as possible to the number 21 but without going over it.
+
+At the same, a dealer will be hitting for cards until it has an
+accumulated value of 17 or more, in case it gets to this value
+then it will stand.
+
+The basic actions such as hitting and standing are implemented.
+At the beginning of the session, it also possible for the user
+to make a bet for chips, though in case the player ends up
+without chips then the game is over.
+
+**** DONE The Card                                                    :class:
+
+A card can have a type (e.g. heart), and a value (A ... K).
+
+We need to implement a method such that we can
+get the numerical value from what was tagged to the card.
+An ace is the only exception, since it can have a value
+of 1 or 11 depending of the context.
+
+By default, we will consider the Ace to have a value of 1,
+and let the game the task to define whether the value should
+be changed to 11 depending on the situation.
+
+Note that in order to get its numerical value
+we need to cast it into an integer.
+
+#+BEGIN_SRC ruby :tangle lib/card.rb :mkdirp true
+  module BlackJack
+    class Card
+      attr_reader :type
+      attr_reader :value
+
+      def initialize(options)
+        @type  = options[:type]
+        @value = Value.new(options[:value])
+      end
+
+      def is_ace?
+        @value.label == 'A'
+      end
+
+      def to_s
+       "[#{value}/#{type}]"
+      end
+
+      class Value
+        attr_reader :label
+
+        def initialize(label)
+          @label = label
+          self.to_i
+        end
+
+        def to_s
+          @label
+        end
+
+        def to_i
+          case @label
+          when 'J', 'Q', 'K'
+            10
+          when 'A'
+            1
+          when '2', '3', '4', '5', '6', '7', '8', '9', '10'
+            @label.to_i
+          else
+            raise ArgumentError, "Invalid value '#{@label}' given to a card!"
+          end
+        end
+      end
+    end
+  end
+#+END_SRC
+
+**** DONE The Deck                                                    :class:
+
+A deck is conformed by many cards.
+As the game progresses, we will be taking away cards
+from the deck.
+
+Note that upon start the deck is ordered so it needs to be shuffled
+during the game.  On a new game, we would throw away current deck
+and get a new one rather than trying to repair the state of the deck.
+
+#+BEGIN_SRC ruby :tangle lib/deck.rb
+  require 'card'
+  module BlackJack
+    class Deck
+      attr_reader :cards
+
+      CARD_TYPES  = %w(♤ ♦ ♥ ♣)
+      CARD_VALUES = %w(A 2 3 4 5 6 7 8 9 10 J Q K)
+
+      def initialize(options={})
+        @cards = []
+
+        number_of_decks = options[:decks_amount] || 1
+        number_of_decks.times do
+          deck_of_cards = CARD_TYPES.map do |t|
+            CARD_VALUES.map do |v|
+              Card.new({ :type => t, :value => v })
+            end
+          end
+          @cards << deck_of_cards
+        end
+
+        @cards.flatten!
+      end
+
+      def pop
+        @cards.pop
+      end
+    end
+  end
+#+END_SRC
+
+**** DONE The Player                                                  :class:
+
+Some properties and behaviors from a =Player= in the BlackJack game:
+
+- Can have chips.  At the beginning it starts with 100 chips.
+
+- Can have a hand with cards.  Basically an array of cards.
+  Should be reset after each game (give back the cards)
+
+- In case the the sum of the hand is over 21, the player is busted.
+
+- In case the player has a soft hand, we need to compute
+  the best possible solution that would benefit the player.
+
+- Note that the dealer is very much like the player in terms of behaviors,
+  their only difference is their participation in the game.
+
+#+BEGIN_SRC ruby :tangle lib/player.rb
+    module BlackJack
+      class Player
+        attr_accessor :chips
+        attr_accessor :hand
+        attr_accessor :bet
+        alias :cards :hand
+
+        def initialize(options={})
+          @chips = options[:chips] || 100
+          @hand  = []
+        end
+
+        def sum_of_hand
+          hand.inject(0) do |total, card|
+            total += card.value.to_i
+          end
+        end
+
+        def is_busted?
+          sum_of_hand > 21 ? true : false
+        end
+
+        def cards_info(options={})
+          info = ''
+
+          cards.each do |card|
+            info << "- #{card.to_s}\n"
+          end
+          info << "\n"
+
+          info
+        end
+
+        def has_soft_hand?
+          true if cards.any? {|card| card.is_ace? } and (sum_of_hand + 10) <= 21
+        end
+
+        def best_soft_hand_result
+          possible_results = []
+
+          possible_results << sum_of_hand
+          aces_number = cards.select {|c| c.is_ace? }.count
+
+          aces_number.times do |n|
+            factor = n + 1
+            possible_results << sum_of_hand + factor * 10
+          end
+
+          # Get single closest result to 21
+          possible_results.select {|result| result <= 21}.max
+        end
+      end
+    end
+#+END_SRC
+
+**** DONE The Dealer                                                  :class:
+
+The Dealer is very much like the Player with the exception
+that he does not have chips and in the way how it displays its cards,
+we need to override so that only the first card is shown.
+
+#+BEGIN_SRC ruby :tangle lib/dealer.rb
+  module BlackJack
+    class Dealer < Player
+
+      def initialize(options={})
+        super(options)
+        @chips = 0
+      end
+
+      def cards_info(options={})
+        info = ''
+
+        if options[:reveal_cards]
+          return super
+        else
+          unhidden_cards, hidden_cards = cards.partition.with_index {|_, index| index < 1 }
+          unhidden_cards.each do |card|
+            info << "- #{card.to_s}\n"
+          end
+          hidden_cards.each do |card|
+            info << "- [?/?]\n"
+          end
+          info << "\n"
+        end
+
+        info
+      end
+    end
+  end
+#+END_SRC
+
+**** DONE The Game						      :class:
+
+The BlackJackGame depends on other models,
+so we make sure that we include them here.
+
+#+BEGIN_SRC ruby :tangle lib/blackjack.rb
+  $LOAD_PATH << File.dirname(__FILE__)
+  require 'card'
+  require 'deck'
+  require 'player'
+  require 'dealer'
+
+  module BlackJack
+  class Game
+#+END_SRC
+
+***** DONE Initialize the game
+
+Setting sane defaults for the game.
+
+By modyfing the number of decks, factors like the house advantage can be affected.
+By default, when the player wins it receives the double of the bet.
+
+#+begin_src ruby :tangle lib/blackjack.rb
+    DEFAULT_CHIPS_MULTIPLIER = 2
+    DEFAULT_DECKS_AMOUNT = 1
+
+    attr_accessor :deck
+    attr_accessor :player
+    attr_accessor :dealer
+
+    def initialize(options={})
+      @decks_amount = options[:decks_amount] || DEFAULT_DECKS_AMOUNT
+      @chips_bet_multiplier  = options[:chips_bet_multiplier] || DEFAULT_CHIPS_MULTIPLIER
+    end
+
+#+end_src
+
+***** DONE Define the loop for the game
+
+We display an initial greeting to the user and start the game loop.
+
+The game loop consists of continuously playing new hands
+until the player is out of chips or decides to leave
+(which can be done at any time via Ctrl-C).
+
+#+begin_src ruby :tangle lib/blackjack.rb
+
+  def play!
+    raise "Cannot start playing without a player and a dealer" unless player and dealer
+    trap('INT') { game_over }
+
+    display "#########################################"
+    display "Welcome to the Blackjack game."
+    display ""
+    display "Press C-c at any time to exit the game."
+    display "#########################################"
+    begin
+      play_new_hand
+    end until game_cannot_continue
+    game_over
+  end
+
+#+end_src
+
+***** DONE Start the game
+
+For the game to start, it needs a player and a dealer.
+Here we define them and make them part of the game.
+
+#+begin_src ruby :tangle lib/blackjack.rb
+
+    def self.start!(options={})
+      player = Player.new({:chips => 100 })
+      dealer = Dealer.new
+
+      game = Game.new(options)
+      game.player = player
+      game.dealer = dealer
+      game.play!
+    end
+
+#+end_src
+
+***** DONE Define a hand in the game
+
+First, we get a deck of cards (by default a single set) and shuffle them.
+Then, the Player makes a bet of the number of chips for this hand.
+
+Note that we need to reset the following before the next game:
+
+- Deck of cards
+- Player cards
+- Dealer cards
+- Bet done by the player
+
+#+BEGIN_SRC ruby :tangle lib/blackjack.rb
+
+  def play_new_hand
+    deck = Deck.new(:decks_amount => @decks_amount.to_i)
+    deck.cards.shuffle!
+    player.bet  = 0
+    player.hand = []
+    dealer.hand = []
+
+    display "Game to be played with #{deck.cards.count} cards."
+    display ""
+    display "Please make a bet on the number of chips for this round."
+    place_bet
+
+    display "#################################"
+    display "                                 "
+    display " Bet: #{player.bet} chips        "
+    display "                                 "
+    display "#################################"
+    display "                                 "
+    display "Game starts!                     "
+    display "                                 "
+
+#+END_SRC
+
+The Dealer starts with 2 cards but then is supposed to be
+hitting the cards until getting at least 17 points, after
+that it will stand.  If it busts, then the player wins.
+
+Note that we should only shows one card from the dealer.
+
+#+BEGIN_SRC ruby :tangle lib/blackjack.rb
+
+  2.times { dealer.hand << deck.pop }
+  display "Dealer cards are:"
+  display ""
+  display dealer.cards_info
+
+#+END_SRC
+
+We give the player the first pair of cards and then
+the player decides whether to hit or stand on the following turns.
+
+#+begin_src ruby :tangle lib/blackjack.rb
+
+    2.times { player.hand << deck.pop }
+    begin
+      display "Player cards are:"
+      display ""
+      display player.cards_info
+
+      next_move = next_move_option
+      player.cards << deck.pop if next_move =~ /^h/i
+      break if player.is_busted?
+
+      # Then Dealer makes his move
+      if dealer.sum_of_hand >= 17
+        display "Dealer stands with #{dealer.cards.count} cards. "
+      else
+        dealer.cards << deck.pop
+        display "Dealer hits and now has #{dealer.cards.count} cards. "
+      end
+      break if dealer.is_busted?
+    end until player.sum_of_hand == 21 or next_move =~ /^s/i
+
+#+end_src
+
+Once the player has been busted or decided to stand,
+we need to decide whether to process who is the winner
+of the current hand.  Order is important while we are checking this,
+the player was the first one to draw the card so we need to check
+whether it was the one to burst first.
+
+Also, we need to be specially careful on how to handle a soft hand
+for the player -- when there is at least an ace within the hand.
+In case we have a soft hand, we need to identify the possibilities
+of using the values from the ace card and in case there is a combination
+which beats the dealer match, then the player wins.
+
+#+BEGIN_SRC ruby :tangle lib/blackjack.rb
+
+    display "Player cards are:"
+    display ""
+    display player.cards_info
+
+    case
+    when player.is_busted?
+      display "*** HOUSE WINS: Player's hand (#{player.sum_of_hand}) is over 21. ***"
+      process_house_win
+
+    when dealer.is_busted?
+      display "*** PLAYER WINS: Dealer's hand (#{dealer.sum_of_hand}) is over 21. ***"
+      process_player_win
+
+    when player.sum_of_hand == dealer.sum_of_hand
+      display "*** NO WINNER: Tie at #{player.sum_of_hand}, bet needs to be replaced. ***"
+      process_tie
+
+    when player.sum_of_hand > dealer.sum_of_hand
+      display "*** PLAYER WINS: Dealer's hand (#{dealer.sum_of_hand}) sum is less than the one from the Player (#{player.sum_of_hand}) ***"
+      process_player_win
+
+    when player.sum_of_hand < dealer.sum_of_hand
+      if player.has_soft_hand?
+        best_result = player.best_soft_hand_result
+        display "*** Player has a soft hand. Its best result would be: #{best_result} ***"
+
+        case
+        when best_result > dealer.sum_of_hand
+          display "*** PLAYER WINS: Dealer's hand (#{dealer.sum_of_hand}) sum is less than the one from the Player (#{best_result}) ***"
+          process_player_win
+
+        when best_result == dealer.sum_of_hand
+          display "*** NO WINNER: Tie at #{best_result}, bet needs to be replaced. ***"
+          process_tie
+
+        when best_result < dealer.sum_of_hand
+          display "*** HOUSE WINS: Player's hand (#{best_result}) sum is less than the one from the Dealer (#{dealer.sum_of_hand}) ***"
+          process_house_win
+
+        else
+          raise UnexpectedCondition, "Unexpected winning condition in the game"
+        end
+      else
+        display "HOUSE WINS: Player's hand (#{player.sum_of_hand}) is less than the one from the Dealer (#{dealer.sum_of_hand})"
+        process_house_win
+      end
+    else
+      raise UnexpectedCondition, "Unexpected condition in the game"
+    end
+    ask_to_continue_game
+  end
+
+#+END_SRC
+
+Only possible actions to be done by the users are either hitting or standing.
+If the letter /h/ is the first character to be typed,
+then it means that the player will hit for more cards.
+Furthermore, if the first letter is /s/, then it means that 
+the player wants to stand.
+
+#+BEGIN_SRC ruby :tangle lib/blackjack.rb
+  def next_move_option
+    option = ''
+    begin
+      # The Player makes the first move
+      print "Your next move [(h)it | (s)tand]> "
+      option = gets
+      puts  ""
+    end until option =~ /^[hs]/i
+    option
+  end
+#+END_SRC
+
+After either winning or losing, we get asked whether we wish to continue the game.
+Answering /y/ would make the game continue and /n/~ stops it.
+
+#+BEGIN_SRC ruby :tangle lib/blackjack.rb
+
+  def ask_to_continue_game
+    game_over if game_cannot_continue
+    display ""
+    display "Remaining chips: #{player.chips}"
+    print "Play once again? [(y)es | (n)o]> "
+
+    begin
+      continue_option = gets
+      if continue_option =~ /^y/i
+        # pass
+      elsif continue_option =~ /^n/i
+        game_over
+      end
+    end until continue_option =~ /^[yn]/i
+    display ""
+    display "------------------------------------------------------"
+  end
+
+#+END_SRC
+
+***** DONE Process the initial bet
+
+A Player can bet some of his chips so that they are multiplied in case he wins.
+
+We need to validate that the bet is valid by checking that:
+
+- The player has enough chips to make such bet
+- The amount to be bet is an integer number (we would trunctate decimals)
+
+#+begin_src ruby :tangle lib/blackjack.rb
+
+def place_bet
+  bet = 0
+  begin
+    print "How many chips will you bet? [Remaining: #{player.chips}]> "
+    bet_amount = gets
+    bet = bet_amount.to_i
+  end until bet_is_valid?(bet)
+  player.bet = bet
+end
+
+#+end_src
+
+#+BEGIN_SRC ruby :tangle lib/blackjack.rb
+
+def bet_is_valid?(bet)
+  if bet <= 0
+   display "INVALID BET: You should at least bet 1 chip."
+   return false
+  end
+
+  if player.chips < bet
+   display "INVALID BET: You don't have enough chips to place that bet."
+   return false
+  end
+
+  true
+end
+
+#+END_SRC
+
+***** DONE Process winning, tie and losing events
+
+In case the player wins, we multiply the amount of chips
+in the bet by a factor.  We also show the cards that the
+dealer was using at the time so that the player can confirm.
+
+#+BEGIN_SRC ruby :tangle lib/blackjack.rb
+
+def reveal_dealer_cards
+  display "Dealer cards were:"
+  display ""
+  display dealer.cards_info(:reveal_cards => true)
+end
+
+#+END_SRC
+
+#+BEGIN_SRC ruby :tangle lib/blackjack.rb
+
+def process_player_win
+  reveal_dealer_cards
+  amount = player.bet * @chips_bet_multiplier
+  player.chips += amount
+  display "Player wins #{amount} chips."
+end
+
+#+END_SRC
+
+In case the player loses, we discount him the bet mount of chips.
+
+#+BEGIN_SRC ruby :tangle lib/blackjack.rb
+
+def process_house_win
+  reveal_dealer_cards
+  amount = player.bet
+  player.chips -= amount
+  display "Player loses #{amount} chips."
+end
+
+#+END_SRC
+
+No effect in case there was a tie.
+
+#+BEGIN_SRC ruby :tangle lib/blackjack.rb
+
+def process_tie
+  reveal_dealer_cards
+  display "Player keeps bet."
+end
+
+#+END_SRC
+
+***** DONE Define when the game ends
+
+The game ends when the player does not have more chips.
+
+#+BEGIN_SRC ruby :tangle lib/blackjack.rb
+
+def game_cannot_continue
+  player.chips == 0
+end
+
+#+END_SRC
+
+The game can also be aborted by the users via Ctrl-c or by
+saying 'no' to the question of starting another game.
+
+#+BEGIN_SRC ruby :tangle lib/blackjack.rb
+
+def game_over
+   display ""
+   display "********* GAME OVER *********"
+   display ""
+   exit 0
+end
+
+#+END_SRC
+
+***** DONE Slower way to print to the screen
+
+In order to increase the interactivity for the user
+we slow down a bit the printing of characters to the screen.
+
+#+BEGIN_SRC ruby :tangle lib/blackjack.rb
+
+    def display(chars, waiting_time=0.01)
+      chars.each_char do |c|
+        print c
+        sleep waiting_time
+      end
+      print "\n"
+    end
+
+#+END_SRC
+
+***** DONE Exception classes
+
+Try to catch for cases where the condition
+from the game might be invalid.
+
+#+BEGIN_SRC ruby :tangle lib/blackjack.rb
+class UnexpectedCondition < StandardError; end
+#+END_SRC
+
+***** DONE end of BlackJack game implementation                  :class_ends:
+
+#+BEGIN_SRC ruby :tangle lib/blackjack.rb
+end
+end
+#+END_SRC
+
+*** Testing
+
+We use RSpec to test the behaviors from the game.
+We need to bootstrap it here along with a helper script
+to automate the running of the game tests using CI.
+
+#+BEGIN_SRC ruby :tangle Gemfile
+source "https://rubygems.org"
+
+gem 'ruby-beautify'
+gem 'org-converge'
+gem 'rspec'
+#+END_SRC
+
+#+BEGIN_SRC ruby :tangle Rakefile
+#!/usr/bin/env rake
+require 'rspec/core'
+require 'rspec/core/rake_task'
+
+RSpec::Core::RakeTask.new(:spec) do |spec|
+  spec.pattern = FileList['spec/**/*_spec.rb']
+  spec.rspec_opts = ['--format', 'documentation', '--colour']
+end
+
+task :default => :spec
+#+END_SRC
+
+*** Run
+
+Tasks to give formatting to the Ruby code and fix indentation errors.
+
+#+name: ruby-formatter
+#+BEGIN_SRC sh
+bundle install
+for file in `find . -name *.rb`; do 
+  echo "Formatting $file..."
+  bundle exec rbeautify $file > $file.pretty
+  mv $file.pretty $file
+done
+#+END_SRC
+
+A game can be start the game as follows:
+
+#+name: play-the-game
+#+BEGIN_SRC  ruby
+# $LOAD_PATH << File.dirname(__FILE__)
+require './lib/blackjack'
+BlackJack::Game.start!({:decks_amount => 1})
+#+END_SRC
