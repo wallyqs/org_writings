@@ -34,6 +34,52 @@ Tests themselves can be executed with the following command:
 : bundle install
 : bundle exec rake spec
 
-** Example session
+** Example
 
+#+BEGIN_SRC 
+#########################################
+Welcome to the Blackjack game.
 
+Press C-c at any time to exit the game.
+#########################################
+Game to be played with 52 cards.
+
+Please make a bet on the number of chips for this round.
+How many chips will you bet? [Remaining: 1]>
+
+#################################
+                                 
+ Bet: 1 chips        
+                                 
+#################################
+                                 
+Game starts!                     
+                                 
+Dealer cards are:
+
+- [A/♤]
+- [?/?]
+
+Player cards are:
+
+- [5/♥]
+- [3/♣]
+
+Your next move [(h)it | (s)tand]> 
+Dealer hits and now has 3 cards. 
+Player cards are:
+
+- [5/♥]
+- [3/♣]
+
+HOUSE WINS: Player's hand (8) is less than the one from the Dealer (15)
+Dealer cards were:
+
+- [A/♤]
+- [9/♥]
+- [5/♤]
+
+Player loses 1 chips.
+
+ ********* GAME OVER *********
+#+END_SRC

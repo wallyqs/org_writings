@@ -703,7 +703,6 @@ A game can be start the game as follows:
 
 #+name: play-the-game
 #+BEGIN_SRC  ruby
-# $LOAD_PATH << File.dirname(__FILE__)
 require './lib/blackjack'
 BlackJack::Game.start!({:decks_amount => 1})
 #+END_SRC
